@@ -1,0 +1,61 @@
+model SmeltCo
+  uses "mmxprs"
+
+  declarations
+    number_of_products = 3
+    number_of_resources = 4
+    products = 1.. number_of_products
+    resources = 1.. number_of_resources
+    product_names: array(products) of string
+    resource_names: array(resources) of string
+    max_prod, revenue, A, B: array(products) of real
+    max_quant, cost: array(resources) of real
+    raw_mat: array(resources) of mpvar
+    metal_alloys, copper_sum: array(products) of mpvar
+  end-declarations
+
+  initialisations from "smeltco_data.dat"
+    product_names resource_names max_prod max_quant revenue cost A B
+  end-initialisations
+
+  ! Objective function
+  total_profit := sum(p in products) (revenue(p) * metal_alloys(p)) - sum(r in resources)(cost(r) * raw_mat(r))
+
+  ! Constraints
+  forall(p in products) do
+    metal_alloys(p) <= max_prod(p)
+  end-do
+
+  forall(r in resources) do
+    raw_mat(r) <= max_quant(r)
+  end-do
+
+  forall(p in products) do
+  metal_alloys(p) = copper_sum(p) + raw_mat(p+1)
+  A(p) * raw_mat(p+1) <= copper_sum(p)
+  B(p) * copper_sum(p) <= raw_mat(p+1)
+
+  end-do
+
+  raw_mat(1) = sum(p in products) (copper_sum(p))
+
+  maximise(total_profit)
+  
+  writeln('Revenue: £',getsol(sum(p in products) (revenue(p) * metal_alloys(p))))
+  writeln('Cost: £',getsol(sum(r in resources)(cost(r) * raw_mat(r))))
+  writeln('Total profit: £', getsol(total_profit))
+  writeln('')
+  forall(p in products) do writeln('Amount of ', product_names(p),' produced: ', getsol(metal_alloys(p)))
+  end-do
+  writeln('')
+  forall(r in resources) do writeln('Amount of ', resource_names(r),' bought: ',getsol(raw_mat(r)))
+  end-do
+
+end-model
+
+! potential ways to incorporate the 10% lost to blending
+! - multiply revenue values by 0.9 before they are even inputted
+! - multiply objective function revenue sum by 0.9
+! - multiply expected quantity of alloys by 0.9 - winner?
+! - add a constraint? conditional constraint?
+! - does this 10% loss change the amounts of each raw mat we buy? 
