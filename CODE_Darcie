@@ -59,3 +59,14 @@ end-model
 ! - multiply expected quantity of alloys by 0.9 - winner?
 ! - add a constraint? conditional constraint?
 ! - does this 10% loss change the amounts of each raw mat we buy? 
+
+
+
+product_names : ["Brass" "Bronze" "Duralumin"]
+resource_names : ["Copper" "Zinc" "Tin" "Aluminium"]
+max_quant : [80000 100000 75000 50000]
+max_prod : [70000 100000 90000]
+revenue : [8 16 14]
+cost : [12 5 2 8]
+A : [0.25 1.5 0.111111111]
+B : [1 0.25 1]
