@@ -1,1 +1,3 @@
 ! just a thought - do you think we could try to solve the problem ourselves using simplex to try and find an optimal solution? that way we can check if our answer is right.
+
+! 45% aluminium constraint - why we didn't include it
