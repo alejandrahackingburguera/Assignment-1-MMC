@@ -1,0 +1,59 @@
+\section*{Modelling Approach}
+
+We formulate the model in the following 4 steps.
+
+\subsection*{Step 1: Defining the Decision Variables}
+We define $x_i$ as the amount of metal alloy $i$ produced, where $i \in \{\text{Brass}, \text{Bronze}, \text{Duralumin}\}$
+We define $r_i$ as the amount of raw material $i$ bought, where $i \in \{\text{Copper}, \text{Zinc}, \text{Tin}, \text{Aluminium}\}$
+We define $c_i$ as the amount of copper in metal alloy $i$, with $i \in\{\text{Brass}, \text{Bronze}, \text{Duralumin}\}$
+
+\subsection*{Step 2: Defining the Objective Function}
+Our objective is to maximise profit, which is revenue - cost. We therefore want to maximise our revenu while minimising cost. This can be modelled as:
+Maximise 8*{x_1} + 16*{x_2} + 14*{x_3} - (12*{r_1} + 5*{r_2} + 2*{r_3} + 8*{r_4})
+Which can be written more generally as
+Maximise {sum}(i in metal alloys) revenue(i) * {x_i} - {sum}(i in raw materials) cost(i)*{r_i}
+where the revenue and cost values are defined above.
+
+Step 3: Defining the constraints
+We begin with our raw material constraints - there is a limited number of each raw material available to buy.
+{r_1} <= 80000
+{r_2} <= 100000
+{r_3} <= 75000
+{r_4} <= 50000
+
+We also have capacity restrictions
+{x_1} <= 70000
+{x_2} <= 100000
+{x_3} <= 90000
+
+We now define the relationships between metal alloys and raw materials
+{x_1} = 0.9*({c_1}+{r_2})
+{x_2} = 0.9*({c_2}+{r_3})
+{x_3} = 0.9*({c_3}+{r_4})
+
+Here, the 0.9 multiplier accounts for the 10 percent loss due to blending.
+In this set of constraints, we notice that each equation is in the form
+{x_i} = 0.9*({c_i}+{r_i+1}) which will be useful for coding the model later.
+
+We must also ensure the sum of copper used in each alloy is equal to the amount of copper we buy.
+{r_1} = {c_1} + {c_2} + {c_3}
+
+Finally, we have some proportion constraints. These tell us the maximum and minimum amounts of copper we can use in the production of each alloy. To understand these better, we begin with an initial non-linear proportion constraint, written as
+0.2/0.8 <= {c_1}/{r_2} <= 0.5/0.5
+1/4 <= {c_1}/{r_2} <= 1
+We can then multiply through by {r_2} to make this a linear constraint, acquiring:
+1/4*{r_2} <= {c_1} <= 1
+We repeat this process for the other two proportion constraints to acquire
+3/2*{r_3} <= {c_2} <= 1/4*{r_3}
+1/9*{r_4} <= {c_3} <= {r_4}
+
+Note that the constraint of Duralumin being made up of at least 45 percent aluminium is not explicitly stated as it is contained within the constraint requiring copper make up no more than 50 percent of Duralumin.
+
+We can see these as two sets of constraints of the form
+{low_limit_i}*{r_i+1} <= {c_i}
+{c_i} <= {up_limit_i}*{r_i+1}
+Where {low_limit_i} and {up_limit_i} are some scalar values.
+For i in range 1 to 3.
+
+Step 4: The complete LP program:
+CBA rn!
