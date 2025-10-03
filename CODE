@@ -1,89 +1,75 @@
 model SmeltCo
-uses "mmxprs"
+  uses "mmxprs"
 
-declarations
-    number_of_metal_alloys = 3
-    number_of_rawmaterials = 4
+  declarations
+    number_of_products = 3
+    number_of_resources = 4
+    products = 1.. number_of_products
+    resources = 1.. number_of_resources
+    product_names: array(products) of string
+    resource_names: array(resources) of string
+    max_prod, revenue, A, B: array(products) of real
+    max_quant, cost: array(resources) of real
+    raw_mat: array(resources) of mpvar
+    metal_alloys, copper_sum: array(products) of mpvar
+  end-declarations
 
-    metal_alloys = 1..number_of_metal_alloys
-    raw_mat = 1..number_of_rawmaterials
+  initialisations from "smeltco_data_2.dat"
+    product_names resource_names max_prod max_quant revenue cost A B
+  end-initialisations
 
-    metal_alloys_names: array(metal_alloys) of string
-    raw_mat_names: array(raw_mat) of string
+  ! Objective function
+  total_profit := sum(p in products) (revenue(p) * metal_alloys(p)) - sum(r in resources)(cost(r) * raw_mat(r))
 
-    max_quant, max_prod, revenue, cost: array(raw_mat) of real
-    min_copper, max_copper, min_aluminium: array(metal_alloys) of real
+  ! Constraints
+  forall(p in products) do
+    product_ctrs(p) := metal_alloys(p) <= max_prod(p)
+  end-do
 
-    resources_for_metal_alloys: array(metal_alloys, raw_mat) of mpvar
-    production_of_each_metal_alloy: array(metal_alloys) of mpvar
+  forall(r in resources) do
+    resource_ctrs(r) := raw_mat(r) <= max_quant(r)
+  end-do
 
-    composition_allowed: array(metal_alloys, raw_mat) of integer
-    
-    total_produced: array(raw_mat) of real
-end-declarations
+  forall(p in products) do
+  metal_alloys(p) =  0.9 * (copper_sum(p) + raw_mat(p+1))
+  A(p) * raw_mat(p+1) <= copper_sum(p)
+  B(p) * copper_sum(p) <= raw_mat(p+1)
 
-initialisations from "smeltco_data.dat"
-    metal_alloys_names raw_mat_names max_quant max_prod revenue cost composition_allowed min_copper max_copper min_aluminium 
-end-initialisations
+  end-do
 
-! Objective function: maximize profit = revenue - raw material cost
-total_profit := sum(p in metal_alloys) (revenue(p) * production_of_each_metal_alloy(p)) - sum(p in metal_alloys, r in raw_mat) (cost(r) * resources_for_metal_alloys(p, r))
+  raw_mat(1) = sum(p in products) (copper_sum(p))
 
-! Constraints
-forall(r in raw_mat) do
-    sum(p in metal_alloys) resources_for_metal_alloys(p, r) <= max_quant(r)
+  forall(p in products) do
+  metal_alloys(p) >= 0
+  end-do
+
+  maximise(total_profit)
+  
+
+  writeln('Revenue: £', getsol(sum(p in products) (revenue(p)* metal_alloys(p))))
+  writeln('Cost: £',getsol(sum(r in resources)(cost(r) * raw_mat(r))))
+  writeln('Total profit: £',strfmt(100*getsol(total_profit)/100,0,2))
+  writeln('')
+  forall(p in products) do writeln('Amount of ', product_names(p),' produced: ', strfmt(100*getsol(metal_alloys(p))/100,0,2))
+  end-do
+  writeln('')
+  forall(r in resources) do writeln('Amount of ', resource_names(r),' bought: ', strfmt(100*getsol(raw_mat(r))/100,0,2))
+  end-do! x, y, z where y = spacing, z = decimal places
+
+! Sensitivity analysis, reduced costs
+forall(p in products) do
+  writeln("The reduced cost for product ", product_names(p), " is ", getrcost(metal_alloys(p)))
 end-do
 
-! Constraints:
-forall(p in metal_alloys) do
-    production_of_each_metal_alloy(p) <= max_prod(p)
+! Sensitivity analysis, constraints
+
+
+forall(r in resources) do
+	if(getslack((r))<0.0001) then
+		writeln("Dual variable for resource ",resource_names(r), " is ",getdual(resource_ctrs(r)))
+		a := getrange(XPRS_LOACT,resource_ctrs(r))
+		b := getrange(XPRS_UPACT,resource_ctrs(r))
+		writeln("The range for the dual for resource ", resource_names(r), " is (",a,",",b,")")
+	end-if
 end-do
-
-! For each product, percentage limits for copper
-forall(p in metal_alloys) do
-    resources_for_metal_alloys(p, 2) >= min_copper(p) * production_of_each_metal_alloy(p)    ! Copper is resource 2
-    resources_for_metal_alloys(p, 2) <= max_copper(p) * production_of_each_metal_alloy(p)
-end-do
-
-
-resources_for_metal_alloys(3, 1) >= min_aluminium(3) * production_of_each_metal_alloy(3)    ! Aluminium is resource 1
-
-forall(p in metal_alloys) do
-   sum(r in raw_mat) resources_for_metal_alloys(p, r) = (production_of_each_metal_alloy(p) * 0.9)    ! CHECK THIS !!!!
-end-do
-
-forall(p in metal_alloys, r in raw_mat) do
-    if composition_allowed(p, r) = 0 then
-        resources_for_metal_alloys(p, r) = 0
-    end-if
-end-do
-
-
-! Non-negativity
-forall(p in metal_alloys, r in raw_mat) do
-    resources_for_metal_alloys(p, r) >= 0
-end-do
-
-maximize(total_profit)
-
-writeln("Total Profit is: £", getobjval)
-forall(p in metal_alloys) writeln(metal_alloys_names(p), " production (kg): ", getsol(production_of_each_metal_alloy(p)))
-forall(p in metal_alloys, r in raw_mat) do
-    if getsol(resources_for_metal_alloys(p, r)) > 0 then
-        writeln("Raw material [", raw_mat_names(r), "] used for ", metal_alloys_names(p), ": ", getsol(resources_for_metal_alloys(p, r)))
-    end-if
-end-do
-
-forall(r in raw_mat) do
-    total_produced(r) := sum(p in metal_alloys) getsol(resources_for_metal_alloys(p, r))
-    writeln("Total Raw material [", raw_mat_names(r), "] used: ", total_produced(r))
-end-do
-!forall(p in metal_alloys, r in raw_mat) do
-!    writeln("composition_allowed(", p, ",", r, ") = ", composition_allowed(p, r))
-!end-do
-
-
 end-model
-
-
-
