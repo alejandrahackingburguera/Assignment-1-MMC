@@ -81,5 +81,17 @@ model SmeltCo
 		   writeln("The range for the dual for resource ", resource_names(r), " is (",a,",",b,")")
 	  end-if
   end-do
-  
+
+  ! Sensitivity analysis, production capacity
+
+
+  forall(p in products) do
+	  if(getslack(product_ctrs(p))<0.0001) then
+	 	   writeln("Dual variable for product ",product_names(p), 'is ', getdual(product_ctrs(p)))
+		   a := getrange(XPRS_LOACT,product_ctrs(p))
+		   b := getrange(XPRS_UPACT,product_ctrs(p))
+		   writeln("The range for the dual for product ", product_names(p), " is (",a,",",b,")")
+	  end-if
+  end-do
+
   end-model
