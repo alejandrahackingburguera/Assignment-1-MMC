@@ -1,2 +1,85 @@
-writeln("Revenue for : £", strfmt(100*getsol(sum(p in products)(revenue(p)*metal_alloys(p)))/100,0,2))
-writeln("Cost: £", strfmt(100*getsol(sum(r in resources)(cost(r) * raw_mat(r)))/100,0,2))
+model SmeltCo
+  uses "mmxprs"
+
+
+! Defining decision variables, index sets and all required notation
+  declarations
+    number_of_products = 3
+    number_of_resources = 4
+    products = 1.. number_of_products
+    resources = 1.. number_of_resources
+    product_names: array(products) of string
+    resource_names: array(resources) of string
+    max_prod, revenue, A, B: array(products) of real
+    max_quant, cost: array(resources) of real
+    raw_mat: array(resources) of mpvar
+    metal_alloys, copper_sum: array(products) of mpvar
+  end-declarations
+
+  initialisations from "smeltco_data_2.dat"
+    product_names resource_names max_prod max_quant revenue cost A B
+  end-initialisations
+
+  ! Objective function is given as the total profit which is defined as the total revenue minus the total costs
+  total_profit := sum(p in products) (revenue(p) * metal_alloys(p)) - sum(r in resources)(cost(r) * raw_mat(r))
+
+  ! Set of Constraints:
+
+  ! Capacity and availability constraints
+  forall(p in products) do
+    product_ctrs(p) := metal_alloys(p) <= max_prod(p)
+  end-do
+
+  forall(r in resources) do
+    resource_ctrs(r) := raw_mat(r) <= max_quant(r)
+  end-do
+
+
+  ! Proportion, material balance and blending constraints
+  forall(p in products) do
+  metal_alloys(p) =  0.90 * (copper_sum(p) + raw_mat(p+1))
+  A(p) * raw_mat(p+1) <= copper_sum(p)
+  B(p) * copper_sum(p) <= raw_mat(p+1)
+  end-do
+
+  raw_mat(1) = sum(p in products) (copper_sum(p))
+
+  ! Non - negativity constraint
+  forall(p in products) do
+  metal_alloys(p) >= 0
+  end-do
+
+  maximise(total_profit)
+
+
+  writeln("Revenue for : £", strfmt(100*getsol(sum(p in products)(revenue(p)*metal_alloys(p)))/100,0,2))
+  writeln("Cost: £", strfmt(100*getsol(sum(r in resources)(cost(r) * raw_mat(r)))/100,0,2))
+  
+  writeln('Total profit: £',strfmt(100*getsol(total_profit)/100,0,2))
+  writeln('')
+  forall(p in products) do writeln('Amount of ', product_names(p),' produced: ', strfmt(100*getsol(metal_alloys(p))/100,0,2))
+  end-do
+  writeln('')
+  forall(r in resources) do writeln('Amount of ', resource_names(r),' bought: ', strfmt(100*getsol(raw_mat(r))/100,0,2))
+  end-do
+
+  ! Sensitivity analysis, reduced costs
+  writeln('')
+  forall(r in resources) do
+    writeln("The reduced cost for resource ", resource_names(r), " is ", getrcost(raw_mat(r)))
+  end-do
+  writeln('')
+
+! Sensitivity analysis, constraints
+
+
+  forall(r in resources) do
+	  if(getslack(resource_ctrs(r))<0.0001) then
+	 	   writeln("Dual variable for resource ",resource_names(r), " is ",getdual(resource_ctrs(r)))
+		   a := getrange(XPRS_LOACT,resource_ctrs(r))
+		   b := getrange(XPRS_UPACT,resource_ctrs(r))
+		   writeln("The range for the dual for resource ", resource_names(r), " is (",a,",",b,")")
+	  end-if
+  end-do
+  
+  end-model
