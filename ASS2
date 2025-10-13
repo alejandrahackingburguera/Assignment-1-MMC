@@ -1,0 +1,146 @@
+model "ProductiCo_Optimal_Production"
+  uses "mmxprs"
+
+  declarations
+    ! 1. Sets and Indices
+    PRODUCTS = 1..7
+    DAYS = 1..7
+
+    ! 2. Parameters
+    A: array(DAYS, DAYS) of integer            ! On-duty matrix
+    S: array(PRODUCTS) of real                 ! Sale price per unit
+    T: array(PRODUCTS) of real                 ! Standard production time (hours/unit)
+    H_FT, H_PT: real                           ! Daily work hours (Full-time, Part-time)
+    C_FT, C_PT: real                           ! Hourly wage (Full-time, Part-time)
+    W_MAX: integer                             ! Max workers on duty per day
+    R_PT: real                                 ! Union-mandated ratio of PT hours to total
+    FC_7: real                                 ! Fixed cost for producing Product 7
+    B_2: integer                               ! Production threshold for Product 2
+    T2_OT: real                            ! Overtime production time for Product 2
+    H_SETUP: real                              ! Setup hours for concurrent Prod 3 & 4
+    BIG_M: integer
+    B2: integer                                ! Threshold for product 2
+
+    ! 3. Decision Variables
+    x: array(PRODUCTS, DAYS) of mpvar          ! Units of product i produced on day j
+    x_reg: array(DAYS) of mpvar                ! Product 2 regular-rate units on day j
+    x_ot: array(DAYS) of mpvar                 ! Product 2 overtime-rate units on day j
+    f: array(DAYS) of mpvar                    ! FT employees starting 5-day shift on day j
+    p: array(DAYS) of mpvar                    ! PT employees starting 5-day shift on day j
+    y: array(PRODUCTS, DAYS) of mpvar          ! y(i,j)=1 if product i is produced on day j
+    z: array(DAYS) of mpvar                    ! z(j)=1 if products 3&4 are made on day j
+
+    ! 4. Auxiliary Expressions
+    F_T: array(DAYS) of linctr                  ! Total FT employees on duty on day j
+    P_T: array(DAYS) of linctr                  ! Total PT employees on duty on day j
+  end-declarations
+
+  forall(i in PRODUCTS, j in DAYS) x(i, j) is_integer
+  forall(j in DAYS) do
+    x_reg(j) is_integer
+    x_ot(j) is_integer
+    f(j) is_integer
+    p(j) is_integer
+    z(j) is_binary
+  end-do
+  forall(i in PRODUCTS, j in DAYS) y(i, j) is_binary
+
+  initialisations from "PRODUCTI-CO.dat"
+    A S T H_FT H_PT C_FT C_PT W_MAX R_PT FC_7 B2 T2_OT H_SETUP BIG_M
+  end-initialisations
+
+
+  ! Defines total staff on duty based on who started on which day.
+  F_T(1) := f(1) + f(4) + f(5) + f(6) + f(7)
+  F_T(2) := f(2) + f(1) + f(5) + f(6) + f(7)
+  F_T(3) := f(3) + f(2) + f(1) + f(6) + f(7)
+  F_T(4) := f(4) + f(3) + f(2) + f(1) + f(7)
+  F_T(5) := f(5) + f(4) + f(3) + f(2) + f(1)
+  F_T(6) := f(6) + f(5) + f(4) + f(3) + f(2)
+  F_T(7) := f(7) + f(6) + f(5) + f(4) + f(3)
+
+  P_T(1) := p(1) + p(4) + p(5) + p(6) + p(7)
+  P_T(2) := p(2) + p(1) + p(5) + p(6) + p(7)
+  P_T(3) := p(3) + p(2) + p(1) + p(6) + p(7)
+  P_T(4) := p(4) + p(3) + p(2) + p(1) + p(7)
+  P_T(5) := p(5) + p(4) + p(3) + p(2) + p(1)
+  P_T(6) := p(6) + p(5) + p(4) + p(3) + p(2)
+  P_T(7) := p(7) + p(6) + p(5) + p(4) + p(3)
+
+
+  ! Objective Function:
+  TotalRevenue    := sum(i in PRODUCTS, j in DAYS) S(i) * x(i, j)
+  TotalLabourCost := sum(j in DAYS) (H_FT * C_FT * F_T(j) + H_PT * C_PT * P_T(j))
+  TotalFixedCost  := sum(j in DAYS) FC_7 * y(7, j)
+
+  Profit := TotalRevenue - TotalLabourCost - TotalFixedCost
+
+
+  ! Constraints
+
+  ! 1. Daily Labour Hour Adequacy
+  forall(j in DAYS)
+    LabourAdequacy(j) := sum(i in PRODUCTS | i <> 2) T(i) * x(i, j) + T(2) * x_reg(j) + T2_OT * x_ot(j) + H_SETUP * z(j) <= H_FT * F_T(j) + H_PT * P_T(j)
+
+  ! 2. Daily Workforce Capacity
+  forall(j in DAYS)
+    WorkforceCapacity(j) := F_T(j) + P_T(j) <= W_MAX
+
+  ! 3. Weekly Union Regulation
+  ! Total weekly PT hours must not exceed 25% of total weekly hours.
+  UnionRegulation := (1 - R_PT) * H_PT * sum(j in DAYS) P_T(j) <= R_PT * H_FT * sum(j in DAYS) F_T(j)
+
+  ! 4. Product 2 Piecewise Production
+  forall(j in DAYS) do
+    P2_Total_Production(j) := x(2, j) = x_reg(j) + x_ot(j)
+    P2_Regular_Capacity(j) := x_reg(j) <= B_2
+  end-do
+
+  ! 5. Logical Constraint: Production Indicator Activation
+  forall(i in PRODUCTS, j in DAYS)
+    IndicatorActivation(i, j) := x(i, j) <= BIG_M * y(i, j)
+
+  ! 6. Logical Constraint: Joint Production Setup for Products 3 & 4
+  forall(j in DAYS) do
+    JointProd_1(j) := z(j) <= y(3, j)
+    JointProd_2(j) := z(j) <= y(4, j)
+    JointProd_3(j) := z(j) >= y(3, j) + y(4, j) - 1
+  end-do
+
+
+  ! --- Part 1: Solve the Baseline Model ---
+  writeln("Solving Baseline Model (T7 = ", T(7), " hours)")
+  maximize(Profit)
+  
+  
+  if (getprobstat = XPRS_OPT) then
+    fopen("myproductico.txt",F_OUTPUT)
+    writeln("The optimal weekly hiring plan is:")
+    writeln
+    writeln("Day       | FT Hires | PT Hires  ")
+    forall(j in DAYS) writeln(strfmt(j, 9), " | ", strfmt(getsol(f(j)), 8), " | ", strfmt(getsol(p(j)), 8))
+    fclose(F_OUTPUT)
+    BaselineProfit := getobjval
+    writeln("\nOptimal Weekly Profit: £", strfmt(BaselineProfit,5,2), "\n")
+    
+    fopen("myproductico_staff.txt",F_OUTPUT)
+    writeln("\n The daily On-Duty Staff is: ")
+    writeln("Day       | FT Staff | PT Staff | Total Staff")
+    forall(j in DAYS) writeln(strfmt(j, 9), " | ", strfmt(getsol(F_T(j)), 8), " | ", strfmt(getsol(P_T(j)), 8), " | ", getsol(F_T(j))+getsol(P_T(j)))
+    fclose(F_OUTPUT)
+    
+    fopen("myproductico_schedule.txt",F_OUTPUT)
+    writeln("\n The daily Production Schedule (Units) is: ")
+    write("\n Product   |")
+    forall(j in DAYS) write(strfmt(j, 9))
+    forall(i in PRODUCTS) do
+      write(strfmt(i, 9), " |")
+      forall(j in DAYS) write(strfmt(getsol(x(i, j)), 9))
+      writeln
+    end-do
+    fclose(F_OUTPUT)
+  else
+    writeln("No optimal solution found for the baseline model.")
+    exit(1)
+    fclose(F_OUTPUT)
+  end-if
