@@ -110,17 +110,14 @@ model "ProductiCo_Optimal_Production"
 
     fopen("myproductico_schedule.txt", F_OUTPUT)
     writeln("BASELINE PRODUCTION SCHEDULE (Units)")
-    writeln("Product|      ")
-    forall(j in DAYS) do
-    writeln("Day",j)
-    end-do
+    write("Product  |")
+    forall(j in DAYS) write(" ", strfmt("Day " + j, 8))
+    writeln
 
     forall(i in PRODUCTS) do
-      write(i, "\t|")
-      forall(j in DAYS) do
-            write("\t", round(getsol(x(i,j))))
-      end-do
-      writeln
+        write(strfmt(i, -8), " |")
+        forall(j in DAYS) write(" ", strfmt(round(getsol(x(i,j))), 8))
+        writeln
     end-do
     fclose(F_OUTPUT)
   else
@@ -142,6 +139,22 @@ model "ProductiCo_Optimal_Production"
     writeln("No optimal solution found for the new machine scenario.")
   end-if
 
-
 end-model
+
+
+***** DATA FILE : 
+S : [100 420 350 490 550 100 1115 420]
+T : [1.0 2.0 2.7 2.4 4.5 0.7 9.5 3.0]
+H_FT : 8
+H_PT : 6
+C_FT : 80
+C_PT : 35
+W_MAX : 500
+R_PT : 0.25
+FC_7 : 2000
+B2 : 100
+T2_OT : 3.0
+H_SETUP : 75
+BIG_M : [12000 100 4444.4444444444 5000 2666.66666666 17142.857142857142 1263.157894736842105263 3993.3333333333333]
+
 
