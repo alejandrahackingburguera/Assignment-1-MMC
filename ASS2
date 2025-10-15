@@ -3,7 +3,7 @@ model "ProductiCo_Optimal_Production"
 
   declarations
     ! 1. Sets and Indices
-    PRODUCTS = 1..8 ! Corrected to match the 7 products in the assignment
+    PRODUCTS = 1..8
     DAYS = 1..7
 
     ! 2. Parameters
