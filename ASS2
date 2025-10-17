@@ -100,6 +100,21 @@ model "ProductiCo_Optimal_Production"
       writeln(strfmt(d, -8), " | ", strfmt(round(getsol(F_T(d))), 8), " | ", strfmt(round(getsol(P_T(d))), 8), " | ", strfmt(round(getsol(F_T(d))+getsol(P_T(d))), 8))
       end-do
 
+ !   fopen("my_production_schedule.txt", F_OUTPUT)
+ !   writeln("BASELINE PRODUCTION SCHEDULE (Units)")
+ !   write(strfmt("Product", 7), " |")
+ !   forall(d in days) do
+ !     write(strfmt("Day " + d + " |", 14))
+ !   end-do
+ !   writeln
+ ! forall(p in products) do
+ !   write(strfmt(p, -7), " |")
+ !   forall(d in days) do
+ !     write(strfmt(round(getsol(x(p,d))), 12) + " |")
+ !   end-do
+ !   writeln
+ ! end-do
+
   writeln(" ")
   writeln("BASELINE PRODUCTION SCHEDULE (Units)")
   write(strfmt("Product", 7), " |")
@@ -123,6 +138,9 @@ model "ProductiCo_Optimal_Production"
         writeln
       end-if
     end-do
+    
+  writeln(" ")
+  writeln("Combined value of x2 + x8 for all days := ", combined_val)
 
   fclose(F_OUTPUT)
   else
@@ -178,6 +196,9 @@ model "ProductiCo_Optimal_Production"
         writeln
       end-if
     end-do
+    
+  writeln(" ")
+  writeln("Combined value of x2 + x8 for all days := ", combined_val)
 
     fclose(F_OUTPUT)
   else
