@@ -8,9 +8,9 @@ model "ProductiCo_Optimal_Production"
     products = 1.. number_of_products
     days = 1.. number_of_days
     
-    sale_price, production_time, M : array(products) of real
+    sale_price, production_time : array(products) of real
     day_mat: array(days, days) of real
-    hours_FT, hours_PT, wage_FT, wage_PT, W_MAX: real
+    hours_FT, hours_PT, wage_FT, wage_PT, W_MAX, union_limit, M_8: real
     
     x, y: array(products, days) of mpvar
     f_t, p_t: array(days) of mpvar   
@@ -21,7 +21,7 @@ model "ProductiCo_Optimal_Production"
   end-declarations
 
   initialisations from "ass2_data.dat"
-    sale_price production_time hours_FT hours_PT wage_FT wage_PT W_MAX M day_mat
+    sale_price production_time hours_FT hours_PT wage_FT wage_PT W_MAX M_8 day_mat union_limit
   end-initialisations
 
   ! Define on-duty staff for the 5-day schedule
@@ -46,19 +46,19 @@ model "ProductiCo_Optimal_Production"
   end-do
 
   ! 3. Weekly Union Regulation
-  UnionRegulation := sum(d in days) hours_PT * P_T(d) <= 0.25 * (sum(d in days) (hours_FT * F_T(d) + hours_PT * P_T(d)))
+  UnionRegulation := sum(d in days) hours_PT * P_T(d) <= union_limit * (sum(d in days) (hours_FT * F_T(d) + hours_PT * P_T(d)))
 
   ! 4. Product 2 Piecewise Production
   forall(d in days) do
     P2_Regular_Capacity(d) := x(2, d) <= 100
-    P2_Extra(d) := x(8, d) <= M(8) * a(d)
-    P2_Extra_Link(d) := 100 - x(2, d) <= M(8) * (1 - a(d))
+    P2_Extra(d) := x(8, d) <= M_8 * a(d)
+    P2_Extra_Link(d) := 100 - x(2, d) <= M_8 * (1 - a(d))
   end-do
 
   ! 5. Logical Constraint: Production Indicator Activation
-  forall(p in products, d in days) do
-    IndicatorActivation(p, d) := x(p, d) <= M(p) * y(p, d)
-  end-do
+  ! forall(p in products, d in days) do
+  !   IndicatorActivation(p, d) := x(p, d) <= M(p) * y(p, d)
+  ! end-do
 
   ! 6. Logical Constraint: Joint Production Setup for products 3 & 4
   forall(d in days) do
@@ -69,12 +69,19 @@ model "ProductiCo_Optimal_Production"
   ! forall(p in products, j in days) do
   !   x(p,j) <= 500
   ! end-do
+  
+  ! Sensitivity analysis, production capacity
 
+  forall(d in days) do
+	  if(getslack(WorkforceCapacity(d))<0.0001) then
+	 	   writeln("If we could increase the workforce capacity, we would increase profit by £", getdual(WorkforceCapacity(d)))
+		   !a := getrange(XPRS_LOACT,WorkforceCapacity(d))
+		   !b := getrange(XPRS_UPACT,WorkforceCapacity(d))
+		   writeln("The range for the dual for product ", WorkforceCapacity(d), " is (",getrange(XPRS_LOACT,WorkforceCapacity(d)),",",getrange(XPRS_UPACT,WorkforceCapacity(d)),")")
+	  end-if
+  end-do
 
-  writeln("Solving Baseline Model (T7 = ", production_time(7), " hours)")
-  maximize(Profit)
-
- writeln("Solving Baseline Model (T7 = ", production_time(7), " hours)")
+ writeln("Solving Baseline Model")
   maximize(Profit)
 
   if (getprobstat = XPRS_OPT) then
