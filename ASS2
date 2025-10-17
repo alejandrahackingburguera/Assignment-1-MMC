@@ -2,124 +2,129 @@ model "ProductiCo_Optimal_Production"
   uses "mmxprs"
 
   declarations
-    ! 1. Sets and Indices
-    PRODUCTS = 1..8
-    DAYS = 1..7
-
-    ! 2. Parameters
-    S: array(PRODUCTS) of real
-    T: array(PRODUCTS) of real
-    H_FT, H_PT: real
-    C_FT, C_PT: real
-    W_MAX: integer
-    R_PT: real
-    FC_7: real
-    B2: integer
-    T2_OT: real
-    H_SETUP: real
-    BIG_M: array(PRODUCTS) of real
-
-    ! 3. Decision Variables
-    x: array(PRODUCTS, DAYS) of mpvar        ! Units of product i produced on day j
-    f: array(DAYS) of mpvar                  ! FT employees starting on day j
-    p: array(DAYS) of mpvar                  ! PT employees starting on day j
-    y: array(PRODUCTS, DAYS) of mpvar        ! y(i,j)=1 if product i is produced on day j
-    z: array(DAYS) of mpvar                  ! z(j)=1 if products 3&4 are made on day j
-    a: array(DAYS) of mpvar                  ! Binary indicator for extra P2 production
-
-    ! 4. Auxiliary Expressions
-    F_T: array(DAYS) of linctr
-    P_T: array(DAYS) of linctr
-    BaselineProfit: real
+    number_of_products = 8
+    number_of_days = 7
+    products = 1..number_of_products
+    days = 1..number_of_days
+    sale_price, production_time, BIG_M : array(products) of real
+    day_mat: array(days, days) of real
+    hours_FT, hours_PT, wage_FT, wage_PT, W_MAX: real
+    x, y: array(products, days) of mpvar
+    f_t, p_t: array(days) of mpvar
+    z, a: array(days) of mpvar
+    F_T: array(days) of linctr
+    P_T: array(days) of linctr
   end-declarations
 
-  initialisations from "PRODUCTI-CO.dat"
-    S T H_FT H_PT C_FT C_PT W_MAX R_PT FC_7 B2 T2_OT H_SETUP BIG_M
+  initialisations from "ass2_data.dat"
+    sale_price production_time day_mat hours_FT hours_PT wage_FT wage_PT W_MAX BIG_M
   end-initialisations
 
-  ! **** FIX 2: Correctly define on-duty staff for the 5-day schedule ****
-  F_T(1) := f(1) + f(4) + f(5) + f(6) + f(7)
-  F_T(2) := f(1) + f(2) + f(5) + f(6) + f(7)
-  F_T(3) := f(1) + f(2) + f(3) + f(6) + f(7)
-  F_T(4) := f(1) + f(2) + f(3) + f(4) + f(7)
-  F_T(5) := f(1) + f(2) + f(3) + f(4) + f(5)
-  F_T(6) := f(2) + f(3) + f(4) + f(5) + f(6)
-  F_T(7) := f(3) + f(4) + f(5) + f(6) + f(7)
+    ! **** FIX 2: Correctly define on-duty staff for the 5-day schedule ****
+  forall(i in days) do
+    F_T(i) := sum(d in days) day_mat(i,d) * f_t(d)
+    P_T(i) := sum(d in days) day_mat(i,d) * p_t(d)
+  end-do
 
-  P_T(1) := p(1) + p(4) + p(5) + p(6) + p(7)
-  P_T(2) := p(1) + p(2) + p(5) + p(6) + p(7)
-  P_T(3) := p(1) + p(2) + p(3) + p(6) + p(7)
-  P_T(4) := p(1) + p(2) + p(3) + p(4) + p(7)
-  P_T(5) := p(1) + p(2) + p(3) + p(4) + p(5)
-  P_T(6) := p(2) + p(3) + p(4) + p(5) + p(6)
-  P_T(7) := p(3) + p(4) + p(5) + p(6) + p(7)
+  ! F_T(1) := f(1) + f(4) + f(5) + f(6) + f(7)
+  ! F_T(2) := f(1) + f(2) + f(5) + f(6) + f(7)
+  ! F_T(3) := f(1) + f(2) + f(3) + f(6) + f(7)
+  ! F_T(4) := f(1) + f(2) + f(3) + f(4) + f(7)
+  ! F_T(5) := f(1) + f(2) + f(3) + f(4) + f(5)
+  ! F_T(6) := f(2) + f(3) + f(4) + f(5) + f(6)
+  ! F_T(7) := f(3) + f(4) + f(5) + f(6) + f(7)
+
+
+  ! P_T(1) := p(1) + p(4) + p(5) + p(6) + p(7)
+  ! P_T(2) := p(1) + p(2) + p(5) + p(6) + p(7)
+  ! P_T(3) := p(1) + p(2) + p(3) + p(6) + p(7)
+  ! P_T(4) := p(1) + p(2) + p(3) + p(4) + p(7)
+  ! P_T(5) := p(1) + p(2) + p(3) + p(4) + p(5)
+  ! P_T(6) := p(2) + p(3) + p(4) + p(5) + p(6)
+  ! P_T(7) := p(3) + p(4) + p(5) + p(6) + p(7)
 
   ! Objective Function:
-  TotalRevenue    := sum(i in PRODUCTS, j in DAYS) S(i) * x(i, j)
-  TotalLabourCost := sum(j in DAYS) (H_FT * C_FT * F_T(j) + H_PT * C_PT * P_T(j))
-  TotalFixedCost  := sum(j in DAYS) FC_7 * y(7, j)
+
+  TotalRevenue    := sum(p in products, d in days) sale_price(p) * x(p, d)
+  TotalLabourCost := sum(d in days) (hours_FT * wage_FT * F_T(d) + hours_PT * wage_PT * P_T(d))
+  TotalFixedCost  := sum(d in days) 2000 * y(7, d)
 
   Profit := TotalRevenue - TotalLabourCost - TotalFixedCost
 
   ! Constraints
 
-  ! 1. Daily Labour Hour Adequacy
-  forall(j in DAYS)
-    LabourAdequacy(j) := sum(i in PRODUCTS) T(i) * x(i, j) + H_SETUP * z(j) <= H_FT * F_T(j) + H_PT * P_T(j)
-
-  ! 2. Daily Workforce Capacity
-  forall(j in DAYS)
-    WorkforceCapacity(j) := F_T(j) + P_T(j) <= W_MAX
+  ! 1. Daily Labour Hour Adequacy and Workforce Capacity
+  forall(d in days) do
+    LabourAdequacy(d) := sum(p in products) production_time(p) * x(p, d) + 75 * z(d) <= hours_FT * F_T(d) + hours_PT * P_T(d)
+    WorkforceCapacity(d) := F_T(d) + P_T(d) <= W_MAX
+  end-do
 
   ! 3. Weekly Union Regulation
-  UnionRegulation := sum(j in DAYS) H_PT * P_T(j) <= R_PT * (sum(j in DAYS) (H_FT * F_T(j) + H_PT * P_T(j)))
+  UnionRegulation := sum(d in days) hours_PT * P_T(d) <= 0.25 * (sum(d in days) (hours_FT * F_T(d) + hours_PT * P_T(d)))
 
   ! 4. Product 2 Piecewise Production
-  forall(j in DAYS) do
-    P2_Regular_Capacity(j) := x(2, j) <= B2
-    P2_Extra(j) := x(8, j) <= BIG_M(8) * a(j)
-    P2_Extra_Link(j) := 100 - x(2, j) <= BIG_M(8) * (1 - a(j))
+  forall(d in days) do
+    P2_Regular_Capacity(d) := x(2, d) <= 100
+    P2_Extra(d) := x(8, d) <= BIG_M(8) * a(d)
+    P2_Extra_Link(d) := 100 - x(2, d) <= BIG_M(8) * (1 - a(d))
   end-do
 
   ! 5. Logical Constraint: Production Indicator Activation
-  forall(i in PRODUCTS, j in DAYS)
-    IndicatorActivation(i, j) := x(i, j) <= BIG_M(i) * y(i, j)
+  forall(p in products, d in days) do
+    IndicatorActivation(p, d) := x(p, d) <= BIG_M(p) * y(p, d)
+  end-do
 
-  ! 6. Logical Constraint: Joint Production Setup for Products 3 & 4
-  forall(j in DAYS)
-    JointProd_3and4(j) := z(j) >= y(3, j) + y(4, j) - 1
+  ! 6. Logical Constraint: Joint Production Setup for products 3 & 4
+  forall(d in days) do
+    JointProd_3and4(d) := z(d) >= y(3, d) + y(4, d) - 1
+  end-do
 
-  writeln("Solving Baseline Model (T7 = ", T(7), " hours)")
+  writeln("Solving Baseline Model (T7 = ", production_time(7), " hours)")
   maximize(Profit)
 
   if (getprobstat = XPRS_OPT) then
     BaselineProfit := getobjval
     writeln("\nOptimal Weekly Profit: £", strfmt(BaselineProfit, 0, 2), "\n")
 
-    fopen("myproductico.txt", F_OUTPUT)
-    writeln("BASELINE HIRING PLAN")
-    writeln("Day      | FT Hires | PT Hires")
-    forall(j in DAYS) writeln(strfmt(j, -8), " | ", strfmt(round(getsol(f(j))), 8), " | ", strfmt(round(getsol(p(j))), 8))
-    fclose(F_OUTPUT)
+    fopen("T9.5_productico_final.txt", F_OUTPUT)
+    writeln("BASELINE SHIFT PATTERN PLAN")
+    writeln("Shift    | FT Shift | PT Shift")
+    forall(d in days) do
+      writeln(strfmt(d, -8), " | ", strfmt(round(getsol(f_t(d))), 8), " | ", strfmt(round(getsol(p_t(d))), 8))
+    end-do
 
-    fopen("myproductico_staff.txt", F_OUTPUT)
+    writeln(" ")
     writeln("BASELINE ON-DUTY STAFF")
     writeln("Day      | FT Staff | PT Staff | Total Staff")
-    forall(j in DAYS) writeln(strfmt(j, -8), " | ", strfmt(round(getsol(F_T(j))), 8), " | ", strfmt(round(getsol(P_T(j))), 8), " | ", strfmt(round(getsol(F_T(j))+getsol(P_T(j))), 8))
-    fclose(F_OUTPUT)
+    forall(d in days) do
+      writeln(strfmt(d, -8), " | ", strfmt(round(getsol(F_T(d))), 8), " | ", strfmt(round(getsol(P_T(d))), 8), " | ", strfmt(round(getsol(F_T(d))+getsol(P_T(d))), 8))
+      end-do
 
-    fopen("myproductico_schedule.txt", F_OUTPUT)
-    writeln("BASELINE PRODUCTION SCHEDULE (Units)")
-    write("Product  |")
-    forall(j in DAYS) write(" ", strfmt("Day " + j, 8))
-    writeln
-
-    forall(i in PRODUCTS) do
-        write(strfmt(i, -8), " |")
-        forall(j in DAYS) write(" ", strfmt(round(getsol(x(i,j))), 8))
+  writeln(" ")
+  writeln("BASELINE PRODUCTION SCHEDULE (Units)")
+  write(strfmt("Product", 7), " |")
+  forall(d in days) do
+  write(strfmt("Day " + d + " |", 14))
+  end-do
+  writeln
+    forall(p in products) do
+      if p = 2 then
+        write(strfmt("2 ", -7), " |")
+        forall(d in days) do
+          combined_val := getsol(x(2,d)) + getsol(x(8,d))
+          write(strfmt(round(combined_val), 12) + " |")
+        end-do
         writeln
+      elif p <> 8 then
+        write(strfmt(p, -7), " |")
+        forall(d in days) do
+          write(strfmt(round(getsol(x(p,d))), 12) + " |")
+        end-do
+        writeln
+      end-if
     end-do
-    fclose(F_OUTPUT)
+
+  fclose(F_OUTPUT)
   else
     writeln("No optimal solution found for the baseline model.")
     exit(1)
@@ -127,20 +132,60 @@ model "ProductiCo_Optimal_Production"
 
 
   T(7) := 5.5
-  writeln("\nSolving New Machine Model (T7 = ", T(7), " hours)")
+  writeln("\nSolving New Machine Model (T7 = ", production_time(7), " hours)")
 
   maximize(Profit)
 
   if (getprobstat = XPRS_OPT) then
     NewProfit := getobjval
     writeln("Optimal Weekly Profit with New Machine: £", strfmt(NewProfit, 0, 2))
+    fopen("T5.5_productico_final.txt", F_OUTPUT)
     writeln("Maximum you should be willing to pay for the new machine (per week): £", strfmt(NewProfit - BaselineProfit, 0, 2))
+    writeln(" ")
+    writeln("BASELINE SHIFT PATTERN PLAN")
+    writeln("Shift    | FT Shift | PT Shift")
+    forall(d in days) do
+      writeln(strfmt(d, -8), " | ", strfmt(round(getsol(f_t(d))), 8), " | ", strfmt(round(getsol(p_t(d))), 8))
+    end-do
+
+  writeln(" ")
+    writeln("BASELINE ON-DUTY STAFF")
+    writeln("Day      | FT Staff | PT Staff | Total Staff")
+    forall(d in days) do
+      writeln(strfmt(d, -8), " | ", strfmt(round(getsol(F_T(d))), 8), " | ", strfmt(round(getsol(P_T(d))), 8), " | ", strfmt(round(getsol(F_T(d))+getsol(P_T(d))), 8))
+      end-do
+
+  writeln(" ")
+  writeln("BASELINE PRODUCTION SCHEDULE (Units)")
+  write(strfmt("Product", 7), " |")
+  forall(d in days) do
+  write(strfmt("Day " + d + " |", 14))
+  end-do
+  writeln
+    forall(p in products) do
+      if p = 2 then
+        write(strfmt("2 ", -7), " |") ! Use a descriptive label
+        forall(d in days) do
+          combined_val := getsol(x(2,d)) + getsol(x(8,d))
+          write(strfmt(round(combined_val), 12) + " |")
+        end-do
+        writeln
+      elif p <> 8 then
+        write(strfmt(p, -7), " |")
+        forall(d in days) do
+          write(strfmt(round(getsol(x(p,d))), 12) + " |")
+        end-do
+        writeln
+      end-if
+    end-do
+
+    fclose(F_OUTPUT)
   else
     writeln("No optimal solution found for the new machine scenario.")
   end-if
 
-end-model
 
+end-model
 
 ***** DATA FILE : 
 S : [100 420 350 490 550 100 1115 420]
