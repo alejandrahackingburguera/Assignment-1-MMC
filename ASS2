@@ -138,7 +138,7 @@ model "ProductiCo_Optimal_Production"
         writeln
       end-if
     end-do
-    
+
   writeln(" ")
   writeln("Combined value of x2 + x8 for all days := ", combined_val)
 
@@ -149,61 +149,7 @@ model "ProductiCo_Optimal_Production"
   end-if
 
 
-  T(7) := 5.5
-  writeln("\nSolving New Machine Model (T7 = ", production_time(7), " hours)")
-
-  maximize(Profit)
-
-  if (getprobstat = XPRS_OPT) then
-    NewProfit := getobjval
-    writeln("Optimal Weekly Profit with New Machine: £", strfmt(NewProfit, 0, 2))
-    fopen("T5.5_productico_final.txt", F_OUTPUT)
-    writeln("Maximum you should be willing to pay for the new machine (per week): £", strfmt(NewProfit - BaselineProfit, 0, 2))
-    writeln(" ")
-    writeln("BASELINE SHIFT PATTERN PLAN")
-    writeln("Shift    | FT Shift | PT Shift")
-    forall(d in days) do
-      writeln(strfmt(d, -8), " | ", strfmt(round(getsol(f_t(d))), 8), " | ", strfmt(round(getsol(p_t(d))), 8))
-    end-do
-
-  writeln(" ")
-    writeln("BASELINE ON-DUTY STAFF")
-    writeln("Day      | FT Staff | PT Staff | Total Staff")
-    forall(d in days) do
-      writeln(strfmt(d, -8), " | ", strfmt(round(getsol(F_T(d))), 8), " | ", strfmt(round(getsol(P_T(d))), 8), " | ", strfmt(round(getsol(F_T(d))+getsol(P_T(d))), 8))
-      end-do
-
-  writeln(" ")
-  writeln("BASELINE PRODUCTION SCHEDULE (Units)")
-  write(strfmt("Product", 7), " |")
-  forall(d in days) do
-  write(strfmt("Day " + d + " |", 14))
-  end-do
-  writeln
-    forall(p in products) do
-      if p = 2 then
-        write(strfmt("2 ", -7), " |") ! Use a descriptive label
-        forall(d in days) do
-          combined_val := getsol(x(2,d)) + getsol(x(8,d))
-          write(strfmt(round(combined_val), 12) + " |")
-        end-do
-        writeln
-      elif p <> 8 then
-        write(strfmt(p, -7), " |")
-        forall(d in days) do
-          write(strfmt(round(getsol(x(p,d))), 12) + " |")
-        end-do
-        writeln
-      end-if
-    end-do
-    
-  writeln(" ")
-  writeln("Combined value of x2 + x8 for all days := ", combined_val)
-
-    fclose(F_OUTPUT)
-  else
-    writeln("No optimal solution found for the new machine scenario.")
-  end-if
+end-model
 
 
 end-model
