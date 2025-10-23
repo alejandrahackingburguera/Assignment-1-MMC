@@ -97,6 +97,7 @@ model "ProductiCo_Optimal_Production"
 
   ! Post-solution report
   if (getprobstat = XPRS_OPT) then
+     fopen("productico_results.txt" ,F_OUTPUT)
       intial_threshold := getparam("xprs_miprelstop")
       updated_threshold := intial_threshold / 5
       setparam("xprs_miprelstop", updated_threshold )
@@ -152,7 +153,7 @@ model "ProductiCo_Optimal_Production"
      ! current_profit := BaselineProfit
      ! writeln(strfmt(W_MAX, -12), "| ", strfmt(current_profit, -20, 2), "| ", strfmt("Baseline", -15))
 
-     ! W_MAX_limit := 450
+     ! W_MAX_limit := 550
      ! num_iterations := W_MAX_limit - W_MAX
 
      ! if num_iterations > 0 then
@@ -188,6 +189,8 @@ model "ProductiCo_Optimal_Production"
       writeln("No optimal solution found for the baseline model.")
       exit(1)
   end-if
+  
+  fclose(F_OUTPUT) 
 
 end-model
 
