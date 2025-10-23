@@ -84,13 +84,15 @@ model "ProductiCo_Optimal_Production"
 
   ! 4. Logical Production Indicator:
   forall(p in products, d in days) do
-    IndicatorActivation(p, d) := x(p, d) <= BIG_M * y(p, d)
+    IndicatorActivation_Upper(p,d) := x(p,d) <= BIG_M * y(p,d)
+    IndicatorActivation_Lower(p,d) := x(p,d) >= y(p,d)
   end-do
 
   ! 5. Joint Setup Constraint for Products 3 and 4:
   forall(d in days) do
     JointProd_3and4(d) := z(d) >= y(3, d) + y(4, d) - 1
   end-do
+
 
  ! Solve the model
   maximize(Profit)
@@ -99,7 +101,7 @@ model "ProductiCo_Optimal_Production"
   if (getprobstat = XPRS_OPT) then
      fopen("productico_results.txt" ,F_OUTPUT)
       intial_threshold := getparam("xprs_miprelstop")
-      updated_threshold := intial_threshold / 5
+      updated_threshold := intial_threshold / 4
       setparam("xprs_miprelstop", updated_threshold )
 
       writeln("Initially, xprs_miprelstop was set to ", intial_threshold,
@@ -189,8 +191,8 @@ model "ProductiCo_Optimal_Production"
       writeln("No optimal solution found for the baseline model.")
       exit(1)
   end-if
-  
-  fclose(F_OUTPUT) 
+
+  fclose(F_OUTPUT)
 
 end-model
 
