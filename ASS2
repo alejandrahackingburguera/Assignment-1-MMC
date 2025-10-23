@@ -5,95 +5,77 @@ model "ProductiCo_Optimal_Production"
     ! ---- Basic problem indices ----
     number_of_products = 8
     number_of_days = 7
-
     products = 1..number_of_products
     days = 1..number_of_days
 
     ! ---- Input data arrays ----
-    sale_price, production_time : array(products) of real   ! Product-specific parameters
-    day_mat: array(days, days) of real                              ! Defines which staff work which days (shift pattern)
-    hours_FT, hours_PT, wage_FT, wage_PT, W_MAX: integer             ! Hours and wages for full-time & part-time workers
-    Union_limit : real                                              ! Weekly union limit on PT hours
-    H_SETUP: integer                                                ! Setup hours needed when certain products are made together
-    production_threshold_2: integer                                 ! Threshold for regular production of product 2
-    fixedcosts_7 : integer                                           ! Fixed cost per day for product 7
+    sale_price, production_time : array(products) of real
+    day_mat: array(days, days) of real
+    hours_FT, hours_PT, wage_FT, wage_PT, W_MAX: integer
+    Union_limit : real
+    H_SETUP: integer
+    production_threshold_2: integer
+    fixedcosts_7 : integer
     BIG_M: real
 
     ! ---- Decision variables ----
-    x, y: array(products, days) of mpvar   ! x(p,d): quantity of product p on day d
-                                           ! y(p,d): binary variable, 1 if product p produced on day d
-
-    f_t, p_t: array(days) of mpvar         ! f_t(d), p_t(d): FT/PT workers starting shift d
-    z, a: array(days) of mpvar             ! z(d): joint setup indicator; a(d): binary for extra production of product 2
+    x, y: array(products, days) of mpvar
+    f_t, p_t: array(days) of mpvar
+    z, a: array(days) of mpvar
 
     ! ---- Linear constraint placeholders ----
-    F_T: array(days) of linctr             ! Linear constraint defining total FT workers available on day d
-    P_T: array(days) of linctr             ! Linear constraint defining total PT workers available on day d
+    F_T: array(days) of linctr
+    P_T: array(days) of linctr
+    WorkforceCapacity: array(days) of linctr
+
+    ! ---- For sensitivity analysis ----
+    TempConstraint: array(days) of linctr
+    W_MAX_limit, num_iterations: integer
+
   end-declarations
-
-
 
   ! Load all numerical data from external file
   initialisations from "ass2_data.dat"
     sale_price production_time day_mat hours_FT hours_PT wage_FT wage_PT W_MAX production_threshold_2 fixedcosts_7 BIG_M Union_limit
   end-initialisations
 
-
    ! Integer requirements (Variable type requirements)
    forall(p in products, d in days) do
-   x(p,d) is_integer
-   y(p,d) is_binary
+     x(p,d) is_integer
+     y(p,d) is_binary
    end-do
 
    forall(d in days) do
-   f_t(d) is_integer
-   p_t(d) is_integer
-   z(d) is_binary
-   a(d) is_binary
+     f_t(d) is_integer
+     p_t(d) is_integer
+     z(d) is_binary
+     a(d) is_binary
    end-do
 
+  ! Objective Function:
+  TotalRevenue := sum(p in products, d in days) sale_price(p) * x(p, d)
+  !TotalLabourCost := sum(d in days) (hours_FT * wage_FT * F_T(d) + hours_PT * wage_PT * P_T(d))
+  TotalLabourCost := 5 *(hours_FT * wage_FT * sum(d in days) f_t(d) + hours_PT * wage_PT * sum(d in days) p_t(d))
+  TotalFixedCost := sum(d in days) fixedcosts_7 * y(7, d)
+  Profit := TotalRevenue - TotalLabourCost - TotalFixedCost
+
   ! Define on-duty staff for the 5-day schedule.
-  ! Each row i of day_mat tells us which start days d contribute workers
-  ! to the shift on day i. This builds the “effective staff available”
-  ! from the staggered start days.
   forall(i in days) do
     F_T(i) := sum(d in days) day_mat(i,d) * f_t(d)
     P_T(i) := sum(d in days) day_mat(i,d) * p_t(d)
   end-do
 
-  ! Objective Function:
-  ! Total revenue from all products over all days
-  TotalRevenue := sum(p in products, d in days) sale_price(p) * x(p, d)
-
-  ! Total labour cost for full-time and part-time staff
-  TotalLabourCost := sum(d in days) (hours_FT * wage_FT * F_T(d) + hours_PT * wage_PT * P_T(d))
-
-  ! Fixed daily production cost incurred when product 7 is made
-  TotalFixedCost := sum(d in days) fixedcosts_7 * y(7, d)
-
-  ! Final profit (objective to maximize)
-  Profit := TotalRevenue - TotalLabourCost - TotalFixedCost
-
   ! Constraints
-
   ! 1. Daily Labour Hour Adequacy and Workforce Capacity
-  !    Total time needed for production (including setup) must not exceed
-  !    total available labour hours (FT + PT).
-  !    Workforce Capacity: daily headcount cannot exceed W_MAX.
   forall(d in days) do
     LabourAdequacy(d) := sum(p in products) production_time(p) * x(p, d) + H_SETUP * z(d) <= hours_FT * F_T(d) + hours_PT * P_T(d)
     WorkforceCapacity(d) := F_T(d) + P_T(d) <= W_MAX
   end-do
 
   ! 2. Weekly Union Regulation
-  !    Ensures PT hours ≤ Union_limit × total weekly labour hours.
   UnionRegulation := sum(d in days) hours_PT * P_T(d) <= Union_limit * (sum(d in days) (hours_FT * F_T(d) + hours_PT * P_T(d)))
 
-  writeln("")
-
   ! 3. Product 2 Piecewise Production Rule:
-  !    Product 2 has a “regular” production capacity (up to threshold),
-  !    beyond which “extra” production is only allowed if binary a(d)=1.
   forall(d in days) do
     P2_Regular_Capacity(d) := x(2, d) <= production_threshold_2
     P2_Extra(d) := x(8, d) <= BIG_M * a(d)
@@ -101,32 +83,22 @@ model "ProductiCo_Optimal_Production"
   end-do
 
   ! 4. Logical Production Indicator:
-  !    Ensures product p can only be produced if its binary flag y(p,d)=1.
   forall(p in products, d in days) do
     IndicatorActivation(p, d) := x(p, d) <= BIG_M * y(p, d)
   end-do
 
   ! 5. Joint Setup Constraint for Products 3 and 4:
-  !    If both product 3 and product 4 are made on the same day,
-  !    then setup variable z(d)=1 (setup time is required).
   forall(d in days) do
     JointProd_3and4(d) := z(d) >= y(3, d) + y(4, d) - 1
   end-do
 
-  ! 7. (Optional) Additional constraint for senstitivity analysis: Daily production limit
-  ! forall(p in products, j in days) do
-  !    x(p,j) <= 500
-  ! end-do
-
  ! Solve the model
-  writeln("Solving Baseline Model (T7 = ", production_time(7), " hours)")
   maximize(Profit)
-
 
   ! Post-solution report
   if (getprobstat = XPRS_OPT) then
       intial_threshold := getparam("xprs_miprelstop")
-      updated_threshold := intial_threshold / 4
+      updated_threshold := intial_threshold / 5
       setparam("xprs_miprelstop", updated_threshold )
 
       writeln("Initially, xprs_miprelstop was set to ", intial_threshold,
@@ -146,7 +118,6 @@ model "ProductiCo_Optimal_Production"
                 " | ", strfmt(round(getsol(F_T(d)) + getsol(P_T(d))), 8))
       end-do
 
-
       ! ---- Display production schedule ----
       writeln(" ")
       writeln("BASELINE PRODUCTION SCHEDULE (Units)")
@@ -158,7 +129,6 @@ model "ProductiCo_Optimal_Production"
 
       forall(p in products) do
         if p = 2 then
-          ! For product 2, include both regular and extra production
           write(strfmt("2 ", -7), " |")
           forall(d in days) do
             combined_val := getsol(x(2,d)) + getsol(x(8,d))
@@ -166,7 +136,6 @@ model "ProductiCo_Optimal_Production"
           end-do
           writeln
         elif p <> 8 then
-          ! For all other products (excluding dummy product 8)
           write(strfmt(p, -7), " |")
           forall(d in days) do
             write(strfmt(round(getsol(x(p,d))), 12) + " |")
@@ -175,8 +144,46 @@ model "ProductiCo_Optimal_Production"
         end-if
       end-do
 
-      fclose(F_OUTPUT)
+     ! Sensitivity analysis for Wmax
+     ! writeln("\n=== SENSITIVITY ANALYSIS FOR W_MAX (MARGINAL PROFIT OF EXTRA WORKER) ===")
+     ! writeln(strfmt("New W_MAX", -12), "| ", strfmt("New Weekly Profit", -20), "| ", "Marginal Gain")
+     ! writeln("------------|----------------------|-----------------")
 
+     ! current_profit := BaselineProfit
+     ! writeln(strfmt(W_MAX, -12), "| ", strfmt(current_profit, -20, 2), "| ", strfmt("Baseline", -15))
+
+     ! W_MAX_limit := 450
+     ! num_iterations := W_MAX_limit - W_MAX
+
+     ! if num_iterations > 0 then
+     !   forall(i in 1..num_iterations) do
+     !     new_w_max := W_MAX + i
+
+     !     ! Deactivate the original W_MAX constraint
+     !     forall(d in days) sethidden(WorkforceCapacity(d), true)
+
+     !     ! Create and activate a new temporary constraint with the higher limit
+     !     forall(d in days) TempConstraint(d) := F_T(d) + P_T(d) <= new_w_max
+
+     !     maximize(Profit)
+
+     !     if (getprobstat = XPRS_OPT) then
+     !       new_profit := getobjval
+     !       marginal_gain := new_profit - current_profit
+     !       writeln(strfmt(new_w_max, -12), "| ", strfmt(new_profit, -20, 2), "| ", "£", strfmt(marginal_gain, 0, 2))
+     !       current_profit := new_profit
+     !     else
+     !       writeln(strfmt(new_w_max, -12), "| Infeasible or not solved", -20, "|")
+     !       break
+     !     end-if
+
+     !     ! Deactivate the temporary constraint to clean up for the next loop
+     !     forall(d in days) sethidden(TempConstraint(d), true)
+     !   end-do
+     ! end-if
+
+     ! ! Reactivate the original constraint before finishing
+     ! forall(d in days) sethidden(WorkforceCapacity(d), false)
   else
       writeln("No optimal solution found for the baseline model.")
       exit(1)
@@ -185,15 +192,15 @@ model "ProductiCo_Optimal_Production"
 end-model
 
 ***** DATA FILE : 
-sale_price : [100 420 350 490 550 100 1115 420]
-production_time : [1.0 2.0 2.7 2.4 4.5 0.7 9.5 3.0]
+sale_price : [100 420 350 490 550 100 1115]
+production_time : [1.0 2.0 2.7 2.4 4.5 0.7 9.5]
 Union_limit : 0.25
 hours_FT : 8
 hours_PT : 6
 wage_FT : 80
 wage_PT : 35
 W_MAX : 500
-BIG_M : 3993.3333333333333
+BIG_M : 6000
 fixedcosts_7 : 2000
 production_threshold_2  : 100
 H_SETUP: 75
@@ -205,4 +212,3 @@ day_mat : [1 0 0 1 1 1 1
         1 1 1 1 1 0 0
         0 1 1 1 1 1 0
         0 0 1 1 1 1 1]
-
